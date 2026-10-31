@@ -750,7 +750,7 @@ do
 
                     local Path = Format("%s/%s", Menu.Folders.Luas, SafeName)
                     return IsFile(Path) and ReadFile(Path) or nil
-                elseif Action == "Save" or Action == "Create" then
+                elseif Action == "Save" or Action == "Create" or Action == "Delete" then
                     if not Name then return false end
                     local SafeName = GSub(Name, "[^%w%._%-]", "")
                     if SafeName == "" or StringFind(SafeName, "%.%.") then return false end
@@ -763,6 +763,10 @@ do
                     if Action == "Save" then
                         if not IsFile(Path) then return false end
                         WriteFile(Path, Content or "")
+                        return true
+                    elseif Action == "Delete" then
+                        if not IsFile(Path) then return false end
+                        DelFile(Path)
                         return true
                     end
 
