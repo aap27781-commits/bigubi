@@ -182,7 +182,7 @@ local Menu = {}
 -- Menu Library
 do
     LPH_NO_VIRTUALIZE(function()
-        local BasePath = "ConstantUI"
+        local BasePath = "vec2.su"
 
         Menu = {
             Game = "Constant UI",
