@@ -1,14 +1,3 @@
--- Constant.cc UI-only build
--- The original gameplay/cheat modules, hooks, and actor/teleport bootstrap were removed.
-
---[[
-    Information:
-    Constant.cc
-    Developed by axure
-    Started: 17/04/2025
-]]--
-
-
 if not LPH_OBFUSCATED then
     LPH_JIT = function(...) return ... end
     LPH_JIT_MAX = function(...) return ... end
@@ -778,9 +767,31 @@ do
                 end
             end
 
+            -- Theme names are reduced to a safe filename. Keep the extension
+            -- normalization in one place so New/Load/Save/Delete use identical paths.
+            local function GetThemePath(Name)
+                if typeof(Name) ~= "string" then return nil end
+
+                Name = GSub(Name, "%.json$", "")
+                Name = GSub(Name, "[^%w _%-]", "")
+                Name = GSub(Name, "^%s+", "")
+                Name = GSub(Name, "%s+$", "")
+
+                if Name == "" or StringFind(Name, "%.%.") then return nil end
+
+                local FileName = Name .. ".json"
+                return Format("%s/%s", Menu.Folders.Themes, FileName), FileName
+            end
+
             function Menu.ConfigTheme(Action : String, Method : String, Other : Table)
                 if Action == "New" then
-                    return WriteFile(Format("%s/%s.json", Menu.Folders.Themes, Method), Menu.ConfigTheme("Get"))
+                    local Path, FileName = GetThemePath(Method)
+                    if not Path or IsFile(Path) then return false end
+
+                    local Success = pcall(function()
+                        WriteFile(Path, Menu.ConfigTheme("Get"))
+                    end)
+                    return Success, Success and FileName or nil
                 elseif Action == "Get" then
                     local List = {}
 
@@ -808,22 +819,36 @@ do
 
                     return JSONEncode(HttpService, List)
                 elseif Action == "Load" then
-                    Menu.Library:SetTheme(Menu.ConfigTheme("Sanitate", Method), "All")
+                    local Path, FileName = GetThemePath(Method)
+                    if not Path or not IsFile(Path) then return false end
+
+                    local NewTheme = Menu.ConfigTheme("Sanitate", FileName)
+                    if typeof(NewTheme) ~= "table" then return false end
+
+                    Menu.Library:SetTheme(NewTheme, "All")
+                    return true, NewTheme
                 elseif Action == "Save" then
-                    local Path = Format("%s/%s", Menu.Folders.Themes, Method)
+                    local Path = GetThemePath(Method)
+                    if not Path then return false end
 
-                    if IsFile(Path) then
-                        return WriteFile(Path, Menu.ConfigTheme("Get", Other))
-                    end
+                    local Success = pcall(function()
+                        WriteFile(Path, Menu.ConfigTheme("Get", Other or Menu.Theme))
+                    end)
+                    return Success
                 elseif Action == "Delete" then
-                    local Path = Format("%s/%s", Menu.Folders.Themes, Method)
+                    local Path = GetThemePath(Method)
+                    if not Path or not IsFile(Path) then return false end
 
-                    if IsFile(Path) then
-                        return DelFile(Path)
-                    end
+                    local Success = pcall(function()
+                        DelFile(Path)
+                    end)
+                    return Success
                 elseif Action == "List" then
                     local List = {}
-                    local Themes = ListFiles(Menu.Folders.Themes)
+                    local Ok, Themes = pcall(ListFiles, Menu.Folders.Themes)
+                    if not Ok or typeof(Themes) ~= "table" then
+                        return List
+                    end
 
                     for i = 1, #Themes do
                         local This = Match(Themes[i], "([^/\\]+)%.json$")
@@ -833,6 +858,7 @@ do
                         end
                     end
 
+                    Sort(List)
                     return List
                 elseif Action == "Sanitate" then
                     local List = Menu.ConfigTheme("Decode", Method)
@@ -1057,17 +1083,16 @@ do
                     end
 
 
-                    Menu.ConfigTheme("Save", Method, List)
-
                     return List
                 elseif Action == "Decode" then
-                    local Path = Format("%s/%s", Menu.Folders.Themes, Method)
+                    local Path = GetThemePath(Method)
 
                     local RawTheme = {}
                     local List = {}
 
                     pcall(function()
-                        RawTheme = JSONDecode(HttpService, IsFile(Path) and ReadFile(Path) or Method)
+                        local Source = (Path and IsFile(Path)) and ReadFile(Path) or Method
+                        RawTheme = JSONDecode(HttpService, Source)
                     end)
 
                     for Index, Value in next, RawTheme do
@@ -2122,6 +2147,7 @@ do
                     if NewTheme then
                         Menu.Theme = NewTheme
                         Theme = NewTheme
+                        Library.Theme = NewTheme
                     end
 
                     for Render, Values in next, Library.Colors do
